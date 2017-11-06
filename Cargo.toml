@@ -1,0 +1,25 @@
+[package]
+name = "matrix"
+version = "0.1.0"
+authors = ["David Zmick <dpzmick@gmail.com>"]
+
+[features]
+vectorized = ["simd"]
+
+[dependencies]
+simd = { version = "0.2.0", optional = true }
+
+[profile.release]
+debug = true
+
+# use the metadata to store a variety of other compiler flags we would like to
+# use for performance testing, but can't pass through cargo in any way
+[package.metadata.i686]
+args = "-C target-cpu=i686"
+unsupported-features = ["vectorized"]
+
+[package.metadata.p4]
+args = "-C target-cpu=pentium4"
+
+[package.metadata.native]
+args = "-C target-cpu=native"
