@@ -1,4 +1,6 @@
 #!/usr/bin/env python2
+import argparse
+import time
 import toml
 
 # generate a script which will run the entire benchmark suite and format the
@@ -69,8 +71,9 @@ class BencmarkConfig(object):
             self._compiler_config.unsupported_features)
 
     def command(self):
-        return '{} cargo bench --features {}'.format(
+        return '{} cargo bench {} {}'.format(
             self._compiler_config.generate_RUSTFLAGS(),
+            '--features' if self._requested_features else '',
             ','.join(self._requested_features),
         )
 
@@ -85,19 +88,34 @@ class BencmarkConfig(object):
         return self.valid()
 
 if __name__ == '__main__':
-    m = MatrixCargoConfig('../Cargo.toml')
+    parser = argparse.ArgumentParser(description="Benchmark Script Generator")
+    parser.add_argument(
+        "--toml", help="Cargo.toml file to use", default="../Cargo.toml")
+
+    parser.add_argument(
+        "--output_dir",
+        help="Output dir to use when generating benchmarks. Defaults to epoch")
+
+    args = parser.parse_args()
+
+    m = MatrixCargoConfig(args.toml)
+    output_dir = args.output_dir or "output_{}".format(int(time.time()))
 
     assert len(m.features) <= 1, \
             "script doesn't support more than one feature"
 
     print '#!/bin/bash'
+    print "mkdir -p {}".format(output_dir)
 
     for compiler_config in m.complier_configs:
         for feature_list in [[f] for f in m.features] + [[]]:
             bc = BencmarkConfig(compiler_config, feature_list)
             if bc:
-                print '{} | ./cargo_bench_to_csv.py > {}.csv'.format(
+                print '{} | ./cargo_bench_to_csv.py > {}/{}.csv'.format(
                     bc.command(),
+                    output_dir,
                     bc.canonical_name(),
                 )
 
+    print "./generate_report.py {} {}".format(output_dir, output_dir)
+    print "xdg-open {}/report.pdf".format(output_dir)

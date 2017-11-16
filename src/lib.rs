@@ -1,4 +1,5 @@
 #![feature(cfg_target_feature)]
+#![feature(concat_idents)]
 #![feature(iterator_step_by)]
 #![feature(specialization)]
 #![feature(test)]

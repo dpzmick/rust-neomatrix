@@ -15,5 +15,4 @@ if __name__ == "__main__":
     for line in sys.stdin:
         matches = re.search(BENCHMARK_REGEX, line)
         if matches is not None:
-            print ','.join(matches.groups())
-
+            print ','.join([m.replace(',', '') for m in matches.groups()])

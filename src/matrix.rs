@@ -358,10 +358,12 @@ mod tests {
     use std::convert;
     use test;
 
-    pub fn make_big_matrix<T: convert::From<u16> + Default + Clone, O: Ordering>() -> Matrix<T, O>
+    pub fn make_big_matrix<T, O>(size: usize) -> Matrix<T, O>
+        where T: convert::From<u16> + Default + Clone,
+              O: Ordering
     {
         // I have an 8 meg cache, 512x512 is larger than the entire cache
-        let mut m = Matrix::<T, O>::new((512, 512));
+        let mut m = Matrix::<T, O>::new((size, size));
         for i in 0..m.dim().0 {
             for j in 0..m.dim().1 {
                 // largest value is m.dim().0 + m.dim().1 (512 + 512) = 1024
@@ -546,74 +548,93 @@ mod tests {
     #[bench]
     fn fast_add_all1(bench: &mut test::Bencher) -> ()
     {
-        let m = make_big_matrix::<i64, RowMajor>();
+        let m = make_big_matrix::<i64, RowMajor>(128);
         bench.iter(|| test::black_box(add_all_rm(&m)));
     }
 
     #[bench]
     fn fast_add_all2(bench: &mut test::Bencher) -> ()
     {
-        let m = make_big_matrix::<i64, ColumnMajor>();
+        let m = make_big_matrix::<i64, ColumnMajor>(128);
         bench.iter(|| test::black_box(add_all_cm(&m)));
     }
 
     #[bench]
     fn slow_add_all1(bench: &mut test::Bencher) -> ()
     {
-        let m = make_big_matrix::<i64, RowMajor>();
+        let m = make_big_matrix::<i64, RowMajor>(128);
         bench.iter(|| test::black_box(add_all_cm(&m)));
     }
 
     #[bench]
     fn slow_add_all2(bench: &mut test::Bencher) -> ()
     {
-        let m = make_big_matrix::<i64, ColumnMajor>();
+        let m = make_big_matrix::<i64, ColumnMajor>(128);
         bench.iter(|| test::black_box(add_all_rm(&m)));
     }
 
+    // TODO somehow add these into the other set of tests
     // this bench should always run slower than fast_multiply
     #[bench]
     fn slow_multiply(bench: &mut test::Bencher) -> ()
     {
-        let a = make_big_matrix::<i64, ColumnMajor>();
-        let b = make_big_matrix::<i64, RowMajor>();
+        let a = make_big_matrix::<i64, ColumnMajor>(128);
+        let b = make_big_matrix::<i64, RowMajor>(128);
 
         bench.iter(|| &a * &b);
     }
 
-    #[bench]
-    fn fast_multiply(bench: &mut test::Bencher) -> ()
-    {
-        let a = make_big_matrix::<i64, RowMajor>();
-        let b = make_big_matrix::<i64, ColumnMajor>();
+    // #[bench]
+    // fn fast_multiply(bench: &mut test::Bencher) -> ()
+    // {
+    //     let a = make_big_matrix::<i64, RowMajor>(128);
+    //     let b = make_big_matrix::<i64, ColumnMajor>(128);
 
-        bench.iter(|| &a * &b);
-    }
+    //     bench.iter(|| &a * &b);
+    // }
 
-    fn vector_multiply_impl<T>(bench: &mut test::Bencher) -> ()
+    fn vector_multiply_impl<T>(size: usize, bench: &mut test::Bencher) -> ()
         where T: Mul<Output=T> + Add<Output=T> + convert::From<u16> + Default + Clone
     {
-        let a = make_big_matrix::<T, RowMajor>();
-        let b = make_big_matrix::<T, ColumnMajor>();
+        let a = make_big_matrix::<T, RowMajor>(size);
+        let b = make_big_matrix::<T, ColumnMajor>(size);
 
         bench.iter(|| &a * &b);
     }
 
+    // this sucks!
     macro_rules! mult_bench {
-        ($n:ident, $t:ty) => {
+        ($n:ident, $t:ty, $size:expr) => {
             #[bench]
             fn $n(bench: &mut test::Bencher) -> ()
             {
-                vector_multiply_impl::<$t>(bench)
+                vector_multiply_impl::<$t>($size, bench)
             }
 
         }
     }
 
-    mult_bench!(mulf32, f32);
-    mult_bench!(muli32, i32);
-    mult_bench!(mulf64, f64);
-    mult_bench!(muli64, i64);
+    // TODO would like to add other orientations
+    // options to fix this:
+    // 1) use a different benchmark library (none are ready)
+    //    - neither is cargo bench tbh
+    // 2) use another preprocessor
+    //    - no way to generate idents
+    // 3) is there a way to dynamically register new benches?
+    mult_bench!(mulf32_64,  f32, 64);
+    mult_bench!(mulf64_64,  f32, 64);
+    mult_bench!(muli32_64,  f32, 64);
+    mult_bench!(muli64_64,  f32, 64);
+    mult_bench!(mulf32_128, f32, 128);
+    mult_bench!(mulf64_128, f32, 128);
+    mult_bench!(muli32_128, f32, 128);
+    mult_bench!(muli64_128, f32, 128);
+    mult_bench!(mulf32_512, f32, 512);
+    mult_bench!(mulf64_512, f32, 512);
+    mult_bench!(muli32_512, f32, 512);
+    mult_bench!(muli64_512, f32, 512);
+
+    // TODO blas?
 }
 
 // TODO implement iterators
