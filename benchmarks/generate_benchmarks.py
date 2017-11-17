@@ -47,8 +47,12 @@ class MatrixCargoConfig(object):
         return self._toml['features'].keys()
 
     @property
+    def global_env_vars(self):
+        return self._toml['package']['metadata']['global_environment']
+
+    @property
     def complier_configs(self):
-        for cpu, data in self._toml['package']['metadata'].iteritems():
+        for cpu, data in self._toml['package']['metadata']['config'].iteritems():
             yield CompilerConfig(
                 cpu,
                 rustc_args=data['args'],
@@ -103,6 +107,8 @@ if __name__ == '__main__':
 
     assert len(m.features) <= 1, \
             "script doesn't support more than one feature"
+
+    # TODO add the global environment
 
     print '#!/bin/bash'
     print "mkdir -p {}".format(output_dir)

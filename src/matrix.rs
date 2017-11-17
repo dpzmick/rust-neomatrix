@@ -634,7 +634,87 @@ mod tests {
     mult_bench!(muli32_512, f32, 512);
     mult_bench!(muli64_512, f32, 512);
 
-    // TODO blas?
+    use rblas;
+    use libc;
+
+    impl<T> rblas::Matrix<T> for Matrix<T, RowMajor> {
+        fn rows(&self) -> libc::c_int { self.dim.0 as libc::c_int }
+        fn cols(&self) -> libc::c_int { self.dim.1 as libc::c_int }
+        fn as_ptr(&self) -> *const T { self.values.as_ptr() }
+        fn as_mut_ptr(&mut self) -> *mut T { self.values.as_mut_ptr() }
+    }
+
+    impl<T> rblas::Matrix<T> for Matrix<T, ColumnMajor> {
+        fn rows(&self) -> libc::c_int { self.dim.0 as libc::c_int }
+        fn cols(&self) -> libc::c_int { self.dim.1 as libc::c_int }
+        fn as_ptr(&self) -> *const T { self.values.as_ptr() }
+        fn as_mut_ptr(&mut self) -> *mut T { self.values.as_mut_ptr() }
+        fn order(&self) -> rblas::attribute::Order
+        {
+            rblas::attribute::Order::ColMajor
+        }
+    }
+
+    fn blas_multiply_impl<T>(size: usize, bench: &mut test::Bencher)
+        where T: Mul<Output=T> + Add<Output=T>
+                 + convert::From<u16> + Default + Clone + rblas::Gemm
+                 + rblas::default::Default
+    {
+        let a = make_big_matrix::<T, RowMajor>(size);
+        let b = make_big_matrix::<T, ColumnMajor>(size);
+
+        // use matrix impl to multiply matricies
+        // but the build in Mul impl doesn't work with refs,
+        // so I copied the body of it here
+        bench.iter(|| {
+            let ma = &a as &rblas::Matrix<T>;
+            let mb = &b as &rblas::Matrix<T>;
+
+            let mut result = Matrix::new_row_major((a.dim().0, b.dim().1));
+            let mr = &mut result as &mut rblas::Matrix<T>;
+
+            rblas::Gemm::gemm(
+                &rblas::default::Default::one(),
+                rblas::attribute::Transpose::NoTrans,
+                ma,
+                rblas::attribute::Transpose::NoTrans,
+                mb,
+                &rblas::default::Default::zero(),
+                mr);
+        });
+    }
+
+    // this sucks!
+    macro_rules! blas_mult_bench {
+        ($n:ident, $t:ty, $size:expr) => {
+            #[bench]
+            fn $n(bench: &mut test::Bencher) -> ()
+            {
+                blas_multiply_impl::<$t>($size, bench)
+            }
+
+        }
+    }
+
+    // TODO would like to add other orientations
+    // options to fix this:
+    // 1) use a different benchmark library (none are ready)
+    //    - neither is cargo bench tbh
+    // 2) use another preprocessor
+    //    - no way to generate idents
+    // 3) is there a way to dynamically register new benches?
+    blas_mult_bench!(blas_mulf64_64,  f32, 64);
+    blas_mult_bench!(blas_mulf32_64,  f32, 64);
+    blas_mult_bench!(blas_muli32_64,  f32, 64);
+    blas_mult_bench!(blas_muli64_64,  f32, 64);
+    blas_mult_bench!(blas_mulf32_128, f32, 128);
+    blas_mult_bench!(blas_mulf64_128, f32, 128);
+    blas_mult_bench!(blas_muli32_128, f32, 128);
+    blas_mult_bench!(blas_muli64_128, f32, 128);
+    blas_mult_bench!(blas_mulf32_512, f32, 512);
+    blas_mult_bench!(blas_mulf64_512, f32, 512);
+    blas_mult_bench!(blas_muli32_512, f32, 512);
+    blas_mult_bench!(blas_muli64_512, f32, 512);
 }
 
 // TODO implement iterators

@@ -10,6 +10,12 @@ extern crate simd;
 #[cfg(test)]
 extern crate test;
 
+#[cfg(test)]
+extern crate rblas;
+
+#[cfg(test)]
+extern crate libc;
+
 // private modules
 mod vector;
 
