@@ -108,7 +108,10 @@ if __name__ == '__main__':
     assert len(m.features) <= 1, \
             "script doesn't support more than one feature"
 
+    # TODO add a clean step
     # TODO add the global environment
+    # TODO save script in output dir
+    # TODO die on any error in generated script
 
     print '#!/bin/bash'
     print "mkdir -p {}".format(output_dir)

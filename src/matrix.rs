@@ -80,6 +80,26 @@ impl<T: Clone, O: Ordering> Matrix<T, O> {
             ordering: PhantomData,
         }
     }
+
+    /// memcpy from the memory region provided
+    /// It better be the right size!
+    pub unsafe fn from_memory_region(dim: Dimension, ptr: *const T) -> Self
+    {
+        use std::slice;
+
+        let len = dim.0 * dim.1;
+        let v = {
+            // you better not lie to me
+            let ptr_slice = slice::from_raw_parts(ptr, len);
+            ptr_slice.to_vec()
+        };
+
+        Self {
+            dim,
+            values: v,
+            ordering: PhantomData,
+        }
+    }
 }
 
 impl<T, O: Ordering> Matrix<T, O> {
@@ -655,36 +675,84 @@ mod tests {
         }
     }
 
+    fn blas_multiply<T>(a: &Matrix<T, RowMajor>, b: &Matrix<T, RowMajor>)
+        -> rblas::math::Mat<T>
+        where T: Mul<Output=T> + Add<Output=T>
+                 + convert::From<u16> + Default + Clone + rblas::Gemm
+                 + rblas::default::Default
+    {
+        // the rblas bindings are broken when the matricies have different
+        // orientations, but blas should be optimized for this case, so we use
+        // this as the test.
+        // https://github.com/mikkyang/rust-blas/issues/17
+
+        let ma = a as &rblas::Matrix<T>;
+        let mb = b as &rblas::Matrix<T>;
+
+        ma * mb
+    }
+
+    fn blas_to_matrix<T: Clone>(m: rblas::math::Mat<T>) -> Matrix<T, RowMajor>
+    {
+        use rblas::Matrix;
+
+        // for now, forces row major
+        // this doesn't have partial eq?
+        assert!(match m.order() {
+            rblas::attribute::Order::RowMajor => true,
+            _ => false
+        });
+
+        unsafe {
+            let d = (m.rows(), m.cols());
+            super::Matrix::from_memory_region(d, m.as_ptr())
+        }
+    }
+
+    // something is funky in here when I turn on vectorization
+    // breaks the compiler, something about speciaiztio
+    #[test]
+    fn ensure_blas_same()
+    {
+        let (a, b) = (2.0, 1.0);
+        let (x, y) = (0.0, 1.0);
+
+        let mut m1 = Matrix::new((2, 2));
+        let mut m2 = Matrix::new((2, 2));
+
+        m1[(0,0)] = a;
+        m1[(1,0)] = b;
+        m1[(0,1)] = a;
+        m1[(1,1)] = b;
+
+        m2[(0,0)] = x;
+        m2[(0,1)] = y;
+        m2[(1,0)] = x;
+        m2[(1,1)] = y;
+
+        let m3 = &m1 * &m2;
+        let m4 = blas_to_matrix(blas_multiply(&m1, &m2));
+
+        assert_eq!(m3.dim(), m4.dim());
+        assert_eq!(m3, m4);
+    }
+
     fn blas_multiply_impl<T>(size: usize, bench: &mut test::Bencher)
         where T: Mul<Output=T> + Add<Output=T>
                  + convert::From<u16> + Default + Clone + rblas::Gemm
                  + rblas::default::Default
     {
+        // see notes about orientation in blas_multiply
         let a = make_big_matrix::<T, RowMajor>(size);
-        let b = make_big_matrix::<T, ColumnMajor>(size);
+        let b = make_big_matrix::<T, RowMajor>(size);
 
         // use matrix impl to multiply matricies
         // but the build in Mul impl doesn't work with refs,
         // so I copied the body of it here
-        bench.iter(|| {
-            let ma = &a as &rblas::Matrix<T>;
-            let mb = &b as &rblas::Matrix<T>;
-
-            let mut result = Matrix::new_row_major((a.dim().0, b.dim().1));
-            let mr = &mut result as &mut rblas::Matrix<T>;
-
-            rblas::Gemm::gemm(
-                &rblas::default::Default::one(),
-                rblas::attribute::Transpose::NoTrans,
-                ma,
-                rblas::attribute::Transpose::NoTrans,
-                mb,
-                &rblas::default::Default::zero(),
-                mr);
-        });
+        bench.iter(|| { blas_multiply(&a, &b) });
     }
 
-    // this sucks!
+    // this sucks too!
     macro_rules! blas_mult_bench {
         ($n:ident, $t:ty, $size:expr) => {
             #[bench]
